@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR名刺 — 梶溪 浩二</title>
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar-nft.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #000; }
+
+    /* ===== スタート画面 ===== */
+    #ui {
+      position: fixed; inset: 0; z-index: 999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: linear-gradient(160deg, #040d1f, #0a1a3a);
+      font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      color: #fff; padding: 2rem;
+    }
+    .glow-ring {
+      width: 100px; height: 100px; border-radius: 50%;
+      border: 2px solid rgba(0,180,255,0.6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.8rem; margin-bottom: 1.5rem;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 20px rgba(0,180,255,0.3); }
+      50%      { box-shadow: 0 0 50px rgba(0,180,255,0.7); }
+    }
+    h1 {
+      font-size: 1.4rem; font-weight: 700; margin: 0 0 0.3rem;
+      background: linear-gradient(135deg, #fff, #7dd3fc);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .name { font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0 0 1.8rem; }
+
+    .tip {
+      font-size: 0.82rem; color: rgba(255,255,255,0.65);
+      text-align: center; line-height: 2;
+      margin-bottom: 2rem; max-width: 300px;
+    }
+    .tip strong { color: #7dd3fc; }
+    .tip .step {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 1.4em; height: 1.4em; border-radius: 50%;
+      background: rgba(0,180,255,0.2); font-weight: 700;
+      margin-right: 0.3em; font-size: 0.75rem;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #0055ff, #00bcd4);
+      color: #fff; border: none; border-radius: 999px;
+      font-size: 1rem; font-weight: 700;
+      padding: 0.85em 2.5em; cursor: pointer;
+      box-shadow: 0 4px 24px rgba(0,120,255,0.45);
+      transition: transform 0.1s;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    /* ===== ローディング ===== */
+    #loading {
+      position: fixed; inset: 0; z-index: 1000;
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,10,0.93);
+      font-family: 'Hiragino Sans', sans-serif; color: #fff;
+      gap: 1.2rem;
+    }
+    .spinner {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #00bcd4;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #progress-wrap {
+      width: 220px; height: 6px;
+      background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #0055ff, #00bcd4);
+      border-radius: 999px; transition: width 0.3s ease;
+    }
+    #progress-text { font-size: 0.8rem; color: rgba(255,255,255,0.5); }
+    #loading p { margin: 0; font-size: 0.95rem; }
+
+    /* ===== HUD ===== */
+    #hud {
+      display: none; position: fixed; inset: 0;
+      z-index: 998; pointer-events: none;
+    }
+    .hud-top {
+      position: absolute; top: 1rem; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      border: 1px solid rgba(0,180,255,0.25); border-radius: 999px;
+      padding: 0.5em 1.4em;
+      font-family: 'Hiragino Sans', sans-serif;
+      font-size: 0.78rem; color: rgba(255,255,255,0.85); white-space: nowrap;
+    }
+    .hud-bottom {
+      position: absolute; bottom: 2rem; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6); border-radius: 999px;
+      padding: 0.5em 1.4em;
+      font-family: 'Hiragino Sans', sans-serif;
+      font-size: 0.78rem; color: rgba(255,255,255,0.5);
+      display: flex; align-items: center; gap: 0.5rem;
+      pointer-events: auto;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #22c55e; animation: blink 1.4s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    .close-btn {
+      position: absolute; top: 1rem; right: 1rem;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; font-size: 1.1rem; cursor: pointer;
+      pointer-events: auto;
+      display: flex; align-items: center; justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+<!-- スタート画面 -->
+<div id="ui">
+  <div class="glow-ring">🌐</div>
+  <h1>AR名刺</h1>
+  <p class="name">メタバース建築家 梶溪 浩二</p>
+
+  <p class="tip">
+    <span><span class="step">1</span>この名刺を<strong>平らな場所</strong>に置く</span><br>
+    <span><span class="step">2</span>「ARを起動」をタップ</span><br>
+    <span><span class="step">3</span>カメラを<strong>名刺全体</strong>に向ける</span><br>
+    <span><span class="step">4</span><strong>3Dモデルが出現！</strong></span>
+  </p>
+
+  <button class="btn" onclick="startAR()">🎯 ARを起動</button>
+</div>
+
+<!-- ローディング -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>AR初期化中...</p>
+  <div id="progress-wrap"><div id="progress-bar"></div></div>
+  <p id="progress-text">しばらくお待ちください</p>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-top">📸 名刺にカメラを向けてください</div>
+  <button class="close-btn" onclick="stopAR()">✕</button>
+  <div class="hud-bottom">
+    <span class="dot"></span>
+    <span>スキャン中...</span>
+  </div>
+</div>
+
+<!-- ARシーン -->
+<a-scene
+  id="scene"
+  vr-mode-ui="enabled: false"
+  embedded
+  renderer="antialias: true; logarithmicDepthBuffer: true;"
+  arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;"
+  style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh;"
+>
+  <a-assets timeout="30000">
+    <a-asset-item id="model" src="koya3.glb"></a-asset-item>
+  </a-assets>
+
+  <!-- NFTマーカー：36469.fset / .fset3 / .iset と同じ階層に置くこと -->
+  <a-nft
+    type="nft"
+    url="36469"
+    smooth="true"
+    smoothCount="10"
+    smoothTolerance="0.01"
+    smoothThreshold="5"
+  >
+    <a-entity
+      gltf-model="#model"
+      scale="0.05 0.05 0.05"
+      position="0 0 0"
+      rotation="90 0 0"
+      animation="property: rotation; from: 90 0 0; to: 90 360 0; loop: true; dur: 6000; easing: linear"
+    ></a-entity>
+  </a-nft>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<script>
+  let progressInterval = null;
+
+  function startAR() {
+    document.getElementById('ui').style.display = 'none';
+    document.getElementById('loading').style.display = 'flex';
+
+    const scene = document.getElementById('scene');
+    scene.style.display = 'block';
+
+    // 疑似プログレス
+    let p = 0;
+    progressInterval = setInterval(() => {
+      p = Math.min(p + Math.random() * 4 + 1, 90);
+      setProgress(p, 'AR初期化中...');
+    }, 400);
+
+    // ロード完了
+    scene.addEventListener('loaded', onLoaded, { once: true });
+
+    // フォールバック（15秒）
+    setTimeout(() => {
+      if (document.getElementById('loading').style.display !== 'none') {
+        onLoaded();
+      }
+    }, 15000);
+  }
+
+  function onLoaded() {
+    clearInterval(progressInterval);
+    setProgress(100, '完了！');
+    setTimeout(() => {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('hud').style.display = 'block';
+    }, 500);
+  }
+
+  function setProgress(val, text) {
+    document.getElementById('progress-bar').style.width = val + '%';
+    document.getElementById('progress-text').textContent = text || Math.floor(val) + '%';
+  }
+
+  function stopAR() {
+    clearInterval(progressInterval);
+    document.getElementById('scene').style.display = 'none';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('ui').style.display = 'flex';
+  }
+</script>
+</body>
+</html>
