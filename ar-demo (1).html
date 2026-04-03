@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR名刺デモ</title>
+
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+
+    #ui-overlay {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none; z-index: 10;
+    }
+
+    #top-bar {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: 16px 20px 12px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+      display: flex; align-items: center; gap: 10px;
+    }
+    #top-bar .logo { font-size: 13px; font-weight: 700; letter-spacing: 0.15em; color: #fff; text-transform: uppercase; }
+    #top-bar .badge { font-size: 10px; letter-spacing: 0.1em; color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 20px; }
+
+    #height-label {
+      position: absolute; top: 70px; right: 16px;
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px; padding: 8px 12px;
+      font-size: 11px; color: rgba(255,255,255,0.6);
+      letter-spacing: 0.05em; text-align: center; line-height: 1.6;
+    }
+
+    #scan-hint {
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+      text-align: center; transition: opacity 0.5s ease; white-space: nowrap;
+    }
+    #scan-hint .hint-ring {
+      width: 64px; height: 64px;
+      border: 2px solid rgba(255,255,255,0.6); border-radius: 50%;
+      margin: 0 auto 14px;
+      display: flex; align-items: center; justify-content: center;
+      animation: pulse-ring 2s ease-in-out infinite;
+    }
+    #scan-hint .hint-ring::after { content: ''; width: 10px; height: 10px; background: #fff; border-radius: 50%; opacity: 0.8; }
+    #scan-hint .hint-text { font-size: 13px; color: rgba(255,255,255,0.8); letter-spacing: 0.05em; line-height: 1.7; }
+    #scan-hint.hidden { opacity: 0; }
+
+    #tap-hint {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; opacity: 0; transition: opacity 0.5s ease; pointer-events: none;
+    }
+    #tap-hint.visible { opacity: 1; }
+    #tap-hint .tap-circle {
+      width: 72px; height: 72px;
+      border: 2px solid rgba(255,255,255,0.8); border-radius: 50%;
+      margin: 0 auto 12px;
+      animation: tap-pulse 1.5s ease-in-out infinite;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+    }
+    #tap-hint .tap-text { font-size: 14px; color: #fff; letter-spacing: 0.1em; }
+
+    #product-card {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 20px 24px 40px;
+      background: linear-gradient(to top, rgba(0,0,0,0.88) 70%, transparent);
+      transform: translateY(20px); opacity: 0;
+      transition: all 0.5s ease; pointer-events: none;
+    }
+    #product-card.visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
+    #product-card .product-label { font-size: 10px; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 6px; }
+    #product-card .product-name { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    #product-card .product-desc { font-size: 13px; color: rgba(255,255,255,0.65); margin-bottom: 18px; line-height: 1.7; }
+    #product-card .btn-row { display: flex; gap: 10px; }
+    #product-card .btn-primary { flex: 1; padding: 13px; background: #fff; color: #000; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; }
+    #product-card .btn-secondary { padding: 13px 18px; background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+    #loading-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #080808; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 100; transition: opacity 0.6s ease;
+    }
+    #loading-screen.hidden { opacity: 0; pointer-events: none; }
+    .loading-logo { font-size: 18px; font-weight: 700; letter-spacing: 0.2em; color: #fff; text-transform: uppercase; margin-bottom: 40px; }
+    .loading-bar-wrap { width: 160px; height: 2px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; margin-bottom: 16px; }
+    .loading-bar { height: 100%; background: #fff; border-radius: 2px; animation: loading 2.5s ease forwards; }
+    .loading-text { font-size: 11px; letter-spacing: 0.15em; color: rgba(255,255,255,0.4); text-transform: uppercase; }
+
+    @keyframes loading { 0% { width: 0%; } 60% { width: 75%; } 100% { width: 100%; } }
+    @keyframes pulse-ring { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+    @keyframes tap-pulse { 0%, 100% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.1); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <div id="loading-screen">
+    <div class="loading-logo">AR Meishi</div>
+    <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+    <div class="loading-text">カメラを起動しています...</div>
+  </div>
+
+  <div id="ui-overlay">
+    <div id="top-bar">
+      <div class="logo">AR Meishi</div>
+      <div class="badge">Demo</div>
+    </div>
+
+    <div id="height-label">高さ設定<br>床から 30cm</div>
+
+    <div id="scan-hint">
+      <div class="hint-ring"></div>
+      <div class="hint-text">カメラを床や机に向けて<br>平面を検出してください</div>
+    </div>
+
+    <div id="tap-hint">
+      <div class="tap-circle">👆</div>
+      <div class="tap-text">タップして配置</div>
+    </div>
+
+    <div id="product-card">
+      <div class="product-label">Product</div>
+      <div class="product-name" id="product-name">クロワッサン</div>
+      <div class="product-desc" id="product-desc">バター香るサクサクのクロワッサン。毎朝焼きたてをご提供しています。</div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="window.location.href='#'">詳細を見る</button>
+        <button class="btn-secondary" onclick="resetAR()">やり直す</button>
+      </div>
+    </div>
+  </div>
+
+  <a-scene
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled: false;"
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true; colorManagement: true;"
+    style="width:100%;height:100%;position:absolute;top:0;left:0;"
+  >
+    <a-assets>
+      <!--
+        ★ SketchUpから変換した.glbファイルのURLをここに設定
+        例: src="https://umetani73.github.io/ar-meishi/croissant.glb"
+        テスト用サンプルモデル（アヒル）を使用中
+      -->
+      <a-asset-item id="model" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/Duck/glTF-Binary/Duck.glb"></a-asset-item>
+    </a-assets>
+
+    <a-camera id="ar-camera"></a-camera>
+
+    <!--
+      position の Y値 = 0.3 → 床から30cm上
+      カメラの前方 Z=-1.5m の位置に配置
+      ★ scaleはSketchUpモデルのサイズに合わせて調整
+         パン・ケーキ（実寸15cm程度）の場合: scale="0.15 0.15 0.15"
+    -->
+    <a-entity id="ar-model-wrapper" position="0 0.3 -1.5" visible="false">
+      <a-gltf-model
+        id="ar-model"
+        src="#model"
+        scale="0.4 0.4 0.4"
+        rotation="0 0 0"
+        animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear"
+      ></a-gltf-model>
+    </a-entity>
+
+  </a-scene>
+
+  <script>
+    const loadingScreen = document.getElementById('loading-screen');
+    const scanHint      = document.getElementById('scan-hint');
+    const tapHint       = document.getElementById('tap-hint');
+    const productCard   = document.getElementById('product-card');
+    const modelWrapper  = document.getElementById('ar-model-wrapper');
+    let isPlaced = false;
+
+    setTimeout(() => {
+      loadingScreen.classList.add('hidden');
+      tapHint.classList.add('visible');
+    }, 2800);
+
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#product-card') || e.target.closest('#top-bar')) return;
+      if (isPlaced) return;
+      placeModel();
+    });
+
+    function placeModel() {
+      isPlaced = true;
+
+      const camera = document.getElementById('ar-camera');
+      const camPos = camera.getAttribute('position') || {x:0, y:0, z:0};
+      const camRot = camera.getAttribute('rotation') || {x:0, y:0, z:0};
+
+      const angle = THREE.MathUtils.degToRad(camRot.y);
+      const dist  = 1.5;
+      const x = camPos.x - Math.sin(angle) * dist;
+      const z = camPos.z - Math.cos(angle) * dist;
+
+      // Y=0.3 = 床から30cm
+      modelWrapper.setAttribute('position', `${x.toFixed(2)} 0.3 ${z.toFixed(2)}`);
+      modelWrapper.setAttribute('visible', 'true');
+
+      scanHint.classList.add('hidden');
+      tapHint.classList.remove('visible');
+      productCard.classList.add('visible');
+    }
+
+    function resetAR() {
+      isPlaced = false;
+      modelWrapper.setAttribute('visible', 'false');
+      scanHint.classList.remove('hidden');
+      tapHint.classList.add('visible');
+      productCard.classList.remove('visible');
+    }
+  </script>
+</body>
+</html>
